@@ -1,0 +1,199 @@
+---
+title: "Data Preprocessing"
+output: html_document
+date: "2025-01-14"
+---
+
+
+```{r}
+# Load necessary libraries
+library(tidyverse)
+
+# Load the dataset
+data <- read.csv("dataset01_eurusd4h.csv")
+```
+
+
+
+```{r}
+ggplot(data, aes(x = factor(tipo))) +
+  geom_bar(fill = "steelblue", alpha = 0.7, width = 0.7) +
+  labs(title = "Distribution of Target Variable (tipo)", 
+       x = "tipo (0 = up, 1 = down)", 
+       y = "Count") +
+  theme_minimal()
+
+# Save with increased height
+ggsave("tall_figure.png", width = 3, height = 8, dpi = 300)
+```
+
+
+
+```{r}
+subset_features <- data %>%
+  select(rsi1, rsi2, rsi3, rsi4, rsi5, rsi6)
+
+# Compute the correlation matrix for the subset
+cor_matrix_subset <- cor(subset_features, use = "complete.obs")
+```
+
+```{r}
+library(corrplot)
+# Plot refined correlation heatmap with adjustments
+corrplot(
+  cor_matrix_subset,
+  method = "circle",      # Use circles to show correlation strength
+  type = "upper",         # Show only upper triangle
+  order = "hclust",       # Reorder features using hierarchical clustering
+  tl.cex = 0.6,           # Decrease text label size for better readability
+  addCoef.col = "black",  # Add correlation coefficients
+  number.cex = 0.6,       # Decrease coefficient text size
+  diag = FALSE,           # Remove diagonal
+  mar = c(0, 0, 2, 0)     # Reduce margins for larger plotting area
+)
+
+```
+
+
+
+
+```{r}
+# Group RSI features
+rsi_columns <- c("rsi1", "rsi2", "rsi3", "rsi4", "rsi5", "rsi6")
+data <- data %>%
+  mutate(RSI_mean = rowMeans(select(., all_of(rsi_columns))))
+
+# Group Stochastic features
+stoch_columns <- c("stoch1", "stoch2", "stoch3", "stoch4", "stoch5", "stoch6")
+data <- data %>%
+  mutate(Stochastic_mean = rowMeans(select(., all_of(stoch_columns))))
+
+# Group EMA slopes
+ema20_columns <- c("ema20Slope1", "ema20Slope2", "ema20Slope3", "ema20Slope4", "ema20Slope5", "ema20Slope6")
+ema50_columns <- c("ema50Slope1", "ema50Slope2", "ema50Slope3", "ema50Slope4", "ema50Slope5", "ema50Slope6")
+ema100_columns <- c("ema100Slope1", "ema100Slope2", "ema100Slope3", "ema100Slope4", "ema100Slope5", "ema100Slope6")
+ema200_columns <- c("ema200Slope1", "ema200Slope2", "ema200Slope3", "ema200Slope4", "ema200Slope5", "ema200Slope6")
+
+data <- data %>%
+  mutate(
+    EMA20_mean = rowMeans(select(., all_of(ema20_columns))),
+    EMA50_mean = rowMeans(select(., all_of(ema50_columns))),
+    EMA100_mean = rowMeans(select(., all_of(ema100_columns))),
+    EMA200_mean = rowMeans(select(., all_of(ema200_columns)))
+  )
+
+# Group other technical indicators
+std_columns <- c("std1", "std2", "std3", "std4", "std5", "std6")
+mom_columns <- c("mom1", "mom2", "mom3", "mom4", "mom5", "mom6")
+BB_columns <- c("BB_up_percen1", "BB_up_percen2", "BB_up_percen3", "BB_up_percen4", "BB_up_percen5", "BB_up_percen6")
+cci_columns <- c("cci1", "cci2", "cci3", "cci4", "cci5", "cci6")
+force_columns <- c("force1", "force2", "force3", "force4", "force5", "force6")
+macd_columns <- c("macd1", "macd2", "macd3", "macd4", "macd5", "macd6")
+bearsPower_columns <- c("bearsPower1", "bearsPower2", "bearsPower3", "bearsPower4", "bearsPower5", "bearsPower6")
+bullsPower_columns <- c("bullsPower1", "bullsPower2", "bullsPower3", "bullsPower4", "bullsPower5", "bullsPower6")
+WPR_columns <- c("WPR1", "WPR2", "WPR3", "WPR4", "WPR5", "WPR6")
+
+data <- data %>%
+  mutate(
+    STD_mean = rowMeans(select(., all_of(std_columns))),
+    MOM_mean = rowMeans(select(., all_of(mom_columns))),
+    BB_mean = rowMeans(select(., all_of(BB_columns))),
+    CCI_mean = rowMeans(select(., all_of(cci_columns))),
+    Force_mean = rowMeans(select(., all_of(force_columns))),
+    MACD_mean = rowMeans(select(., all_of(macd_columns))),
+    BearsPower_mean = rowMeans(select(., all_of(bearsPower_columns))),
+    BullsPower_mean = rowMeans(select(., all_of(bullsPower_columns))),
+    WPR_mean = rowMeans(select(., all_of(WPR_columns)))
+  )
+```
+
+```{r}
+# Retain the target variable and grouped features only
+data_grouped <- data %>%
+  select(tipo, RSI_mean, Stochastic_mean, EMA20_mean, EMA50_mean, EMA100_mean, EMA200_mean,
+         STD_mean, MOM_mean, BB_mean, CCI_mean, Force_mean, MACD_mean,
+         BearsPower_mean, BullsPower_mean, WPR_mean, hour, dayOfWeek)
+```
+
+```{r}
+exchangeability_dataset <- data_grouped
+```
+```{r}
+# Identify numeric columns
+numeric_cols1 <- exchangeability_dataset %>% select(where(is.numeric)) %>% names()
+
+# Standardize numeric columns
+exchangeability_dataset <- exchangeability_dataset %>%
+  mutate(across(all_of(numeric_cols1), ~ scale(.) %>% as.numeric()))
+```
+
+```{r}
+head(exchangeability_dataset)
+write.csv(exchangeability_dataset, "exchangeability_dataset.csv", row.names = FALSE)
+```
+
+
+```{r}
+# Create group-level variable based on day and hour
+data_grouped <- data_grouped %>%
+  mutate(group = as.factor(paste(dayOfWeek, hour %/% 4, sep = "_")))
+
+# Summarize the grouped dataset
+summary(data_grouped)
+```
+
+```{r}
+head(data_grouped)
+```
+
+
+
+```{r}
+# Identify numeric columns
+numeric_cols <- data_grouped %>% select(where(is.numeric)) %>% names()
+
+# Standardize numeric columns
+data_grouped <- data_grouped %>%
+  mutate(across(all_of(numeric_cols), ~ scale(.) %>% as.numeric()))
+```
+
+```{r}
+# Convert all non-numeric columns to numeric using label encoding
+data_grouped <- data.frame(lapply(data_grouped, function(x) {
+  if (is.factor(x) || is.character(x)) {
+    as.numeric(factor(x))
+  } else {
+    x
+  }
+}))
+```
+
+```{r}
+# Summarize the grouped dataset
+summary(data_grouped)
+head(data_grouped)
+```
+
+
+```{r}
+# Save the modified dataset
+write.csv(data_grouped, "dataset_preprocessed.csv", row.names = FALSE)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

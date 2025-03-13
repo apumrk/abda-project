@@ -1,0 +1,1077 @@
+---
+title: "Project ABDA Group 8"
+output: html_document
+date: "2025-01-19"
+---
+
+
+```{r}
+library(brms)
+library(bayesplot)
+library(ggplot2)
+library(loo)
+library(gridExtra)
+library(dplyr)
+library(tidyr)
+```
+```{r}
+ # Loading all the Fitted models
+fit_model1 <- readRDS("fit_model1.rds")
+fit_model2 <- readRDS("fit_model2.rds")
+
+
+
+```
+
+##3.1 Diagnostics Model 1
+###3.1.1 Trace Plots
+###Trace plots ensure the Markov Chains converge and mix well.
+```{r}
+mcmc_plot(fit_model1, type = "trace")
+```
+@@@
+Findings
+The trace plots show good mixing and convergence for all parameters, with chains overlapping nicely
+@@@
+
+
+
+###3.1.2 Posterior Summary and Diagnostics
+###To Summarize posterior means, credible intervals, and diagnostics like R-hat###
+```{r}
+summary(fit_model1)
+```
+@@@
+Posterior Summary
+The summary provides credible intervals, estimates, and diagnostic values (R-hat and ESS). All R-hat values are close to 1, indicating convergence. 
+@@@
+
+
+```{r}
+mcmc_plot(fit_model1, type = "rhat")
+```
+
+@@@
+R-hat plot shows all values close to 1, indicating good convergence. 
+@@@
+
+```{r}
+mcmc_plot(fit_model1, type = "neff")
+```
+@@@
+Most of your parameters appear in the light blue region (𝑁eff/𝑁>0.5), meaning the sampling process is efficient for these parameters. This suggests the MCMC chains are well-mixed and exploring the posterior space effectively for these parameters.
+Some parameters are in the medium blue region (𝑁eff/𝑁≤0.5), which indicates that these parameters might have some autocorrelation but are not critically problematic.
+If any parameters fall in the dark blue region (𝑁eff/𝑁≤0.1), those parameters might be poorly sampled, and you may need to Run more iterations to improve effective sampling.
+@@@
+
+
+###3.1.3 Posterior Density Plots
+###Visualize the posterior distributions of parameters###
+```{r}
+mcmc_plot(fit_model1, type = "dens_overlay")
+```
+@@@
+Posterior Densities
+The density plots for parameters are smooth and distinct, with reasonable spread.
+@@@
+
+
+#################################################################
+##  3.2 Predictor Effects Model 1 
+#################################################################
+
+###3.2.1 Fixed Effects Visualization
+###Visualize the credible intervals for fixed effects (e.g., coefficients of predictors).###
+```{r}
+plot(fixef(fit_model1, summary = TRUE))
+fixef_df <- as.data.frame(fixef(fit_model1, summary = TRUE))
+ggplot(fixef_df, aes(x = Estimate, y = rownames(fixef_df))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = `Q2.5`, xmax = `Q97.5`)) +
+  theme_minimal() +
+  labs(x = "Estimate", y = "Parameter", title = "Fixed Effects")
+```
+@@@
+This plot is a forest plot of fixed effects for the non-hierarchical model. Each row represents a predictor variable, with the black dot showing the posterior mean (estimate) and the horizontal line indicating the 95% credible interval (CI).
+
+Central Point (Black Dot):
+This represents the posterior mean of the coefficient for each predictor.
+The sign of the estimate indicates the direction of the effect:
+Positive values: Predictor increases the probability of the outcome (tipo = 1).
+Negative values: Predictor decreases the probability of the outcome (tipo = 1).
+
+Horizontal Line (95% Credible Interval):
+This shows the range within which the true value of the parameter lies with 95% posterior probability.
+If the CI crosses 0, the effect of the predictor is not statistically significant at the 95% level.
+
+Predictors with Statistically Significant Effects:
+These are predictors whose credible intervals do not overlap 0:
+WPR_mean (positive effect): Likely increases the probability of tipo = 1.
+Force_mean (negative effect): Likely decreases the probability of tipo = 1.
+
+Predictors with Non-Significant Effects:
+These predictors have credible intervals that include 0, suggesting their effect is uncertain or weak:
+Stochastic_mean, RSI_mean, EMA20_mean, etc.
+Magnitude of Effects:
+
+The length of the horizontal line reflects uncertainty:
+Shorter lines (e.g., WPR_mean) indicate higher certainty in the parameter estimate.
+Longer lines (e.g., Force_mean, EMA50_mean) indicate greater uncertainty.
+Intercept:
+
+The intercept represents the baseline log-odds of the outcome when all predictors are at their reference or mean values.
+@@@
+
+
+
+
+
+#################################################################
+##  3.3 Posterior Predictive Checks Model 1  
+#################################################################
+
+###3.3.1 Posterior predictive checks evaluate how well the model fits the data.
+### Posterior predictive checks evaluate how well the model fits the data.###
+
+```{r}
+# Overlay observed and replicated data density
+pp_check(fit_model1,type = "bars")
+```
+@@
+word file
+@@
+
+
+```{r}
+pp_check(fit_model1, type = "dens_overlay")
+```
+@@
+word file
+@@
+
+```{r}
+# Scatter plot of residuals (observed - replicated predictions)
+pp_check(fit_model1, type = "error_scatter_avg")
+```
+@@
+word file
+@@
+```{r}
+# Histogram of predicted responses
+pp_check(fit_model1, type = "hist")
+```
+```{r}
+pp_check(fit_model1, type = "hist") +
+  geom_histogram(binwidth = 0.05) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 8))
+```
+@@
+word file
+@@
+
+### 3.3.2 Conditional Effects Plot
+###Show how predictors influence the response variable, accounting for random effects.###
+```{r}
+# Plot marginal effects of predictors
+ce <- conditional_effects(fit_model1, method = "posterior_epred")
+plot(ce, points = TRUE)
+```
+
+### 3.3.3 Predicted vs. Observed Outcomes
+###Plot the relationship between observed and predicted values.###
+```{r}
+# Extract posterior predictions
+predictions <- posterior_predict(fit_model1)
+
+# Create a scatterplot of observed vs predicted outcomes
+obs_vs_pred <- data.frame(
+  observed = fit_model1$data$tipo,  
+  predicted = apply(predictions, 2, mean) # Mean prediction across samples
+)
+
+ggplot(obs_vs_pred, aes(x = observed, y = predicted, color = as.factor(observed))) +
+  geom_jitter(width = 0.05, alpha = 0.7, size = 2) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(x = "Observed", y = "Predicted", color = "Observed Class") +
+  theme_minimal(base_size = 14)
+
+```
+
+
+
+#################################################################
+# 4. Visualizations Model 2
+#################################################################
+
+### 4.1.1 Trace Plots####
+##Trace plots ensure the Markov Chains converge and mix well.###
+```{r}
+mcmc_plot(fit_model2, type = "trace")
+```
+
+### 4.1.2 Posterior Summary and Diagnostics###
+###To Summarize posterior means, credible intervals, and diagnostics like R-hat###
+```{r}
+summary(fit_model2)
+```
+
+```{r}
+mcmc_plot(fit_model2, type = "rhat")
+```
+
+```{r}
+mcmc_plot(fit_model2, type = "neff")
+```
+
+### 4.1.3 Posterior Density Plots###
+###Visualize the posterior distributions of parameters###
+```{r}
+mcmc_plot(fit_model2, type = "dens_overlay")
+```
+
+### 4.1.4 Random Effects Visualization
+###Show temporal or group-level effects.###
+
+```{r}
+# Extract random effects
+ranef_plot <- ranef(fit_model2)
+
+# Convert random effects to a data frame for plotting
+random_effects_df <- as.data.frame(ranef_plot$group)
+
+# Add a column for group names
+random_effects_df$group <- rownames(random_effects_df)
+
+# Create the plot
+ggplot(random_effects_df, aes(x = reorder(group, Estimate.Intercept), y = Estimate.Intercept, 
+                              ymin = Q2.5.Intercept, ymax = Q97.5.Intercept)) +
+  geom_pointrange() +
+  coord_flip() +  # Flip coordinates for better readability
+  labs(
+    x = "Groups",
+    y = "Random Effect Estimate",
+    title = "Group-Level Random Effects"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+conditional_effects(fit_model2)
+```
+
+
+#################################################################
+##  4.2 Predictor Effects Model 2  
+#################################################################
+
+###4.2.1 Fixed Effects Visualization
+###Visualize the credible intervals for fixed effects (e.g., coefficients of predictors).###
+```{r}
+plot(fixef(fit_model2, summary = TRUE))
+fixef_df <- as.data.frame(fixef(fit_model2, summary = TRUE))
+ggplot(fixef_df, aes(x = Estimate, y = rownames(fixef_df))) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = `Q2.5`, xmax = `Q97.5`)) +
+  theme_minimal() +
+  labs(x = "Estimate", y = "Parameter", title = "Fixed Effects")
+```
+
+####4.2.2 Posterior predictive checks evaluate how well the model fits the data.
+### Posterior predictive checks evaluate how well the model fits the data.###
+
+```{r}
+# Overlay observed and replicated data density
+pp_check(fit_model2,type = "bars")
+```
+
+```{r}
+pp_check(fit_model2, type = "dens_overlay")
+```
+
+```{r}
+# Scatter plot of residuals (observed - replicated predictions)
+pp_check(fit_model2, type = "error_scatter_avg")
+```
+
+```{r}
+pp_check(fit_model2, type = "hist") +
+  geom_histogram(binwidth = 0.05) +
+  theme_minimal() +
+  theme(axis.text = element_text(size = 8))
+```
+
+
+### 4.2.3 Conditional Effects Plot
+###Show how predictors influence the response variable, accounting for random effects.###
+```{r}
+# Plot marginal effects of predictors
+ce <- conditional_effects(fit_model2, method = "posterior_epred")
+plot(ce, points = TRUE)
+```
+
+
+### 4.2.4 Predicted vs. Observed Outcomes
+###Plot the relationship between observed and predicted values.###
+```{r}
+# Extract posterior predictions
+predictions2 <- posterior_predict(fit_model2)
+
+# Create a scatterplot of observed vs predicted outcomes
+obs_vs_pred2 <- data.frame(
+  observed = fit_model2$data$tipo,  
+  predicted = apply(predictions2, 2, mean) # Mean prediction across samples
+)
+
+ggplot(obs_vs_pred2, aes(x = observed, y = predicted, color = as.factor(observed))) +
+  geom_jitter(width = 0.05, alpha = 0.7, size = 2) +
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") +
+  labs(x = "Observed", y = "Predicted", color = "Observed Class") +
+  theme_minimal(base_size = 14)
+
+```
+
+
+
+
+#################################################################
+# 5 Comparison of model 1&2  
+#################################################################
+
+
+
+```{r}
+# Non-Hierarchical Model
+pp_check(fit_model1, type = "dens_overlay") + ggtitle("Posterior Predictive Check: Model 1")
+
+# Hierarchical Model
+pp_check(fit_model2, type = "dens_overlay") + ggtitle("Posterior Predictive Check: Model 2")
+
+```
+```{r}
+# Generate posterior predictive check plot for Model 1
+pp_check(fit_model1, observed = data$tipo, type = "dens_overlay")
+
+# Generate posterior predictive check plot for Model 2
+pp_check(fit_model2, observed = data$tipo, type = "dens_overlay")
+```
+
+
+```{r}
+# Extract posterior predictive distributions
+y_rep1 <- posterior_predict(fit_model1)
+y_rep2 <- posterior_predict(fit_model2)
+
+# Create a data frame for combined plot
+combined_data <- data.frame(
+  y = c(fit_model1$data$tipo, fit_model2$data$tipo),
+  model = rep(c("Model 1", "Model 2"), each = nrow(fit_model1$data)),
+  y_rep_mean = c(apply(y_rep1, 2, mean), apply(y_rep2, 2, mean))
+)
+
+# Create a combined density overlay plot
+library(ggplot2)
+
+ggplot(combined_data, aes(x = y_rep_mean, color = model)) +
+  geom_density(size = 1) +
+  labs(
+    title = "Density Overlay Comparison",
+    x = "Predicted Values",
+    y = "Density"
+  ) +
+  scale_fill_manual(values = c("blue", "red")) +
+  scale_color_manual(values = c("blue", "red")) +
+  theme_minimal()
+
+```
+
+```{r}
+# Combine data for bar plots
+ppc_data <- data.frame(
+  y = c(fit_model1$data$tipo, fit_model2$data$tipo),
+  y_rep_mean = c(apply(y_rep1, 2, mean), apply(y_rep2, 2, mean)),
+  model = rep(c("Model 1", "Model 2"), each = nrow(fit_model1$data))
+)
+
+# Create combined bar plot
+ggplot(ppc_data, aes(x = factor(y), y = y_rep_mean, fill = model)) +
+  geom_bar(stat = "identity", position = "dodge", alpha = 0.7) +
+  labs(
+    title = "Posterior Predictive Check: Bar Plot Comparison",
+    x = "Observed Response",
+    y = "Average Predicted Response"
+  ) +
+  scale_fill_manual(values = c("blue", "red")) +
+  theme_minimal()
+
+```
+
+```{r}
+# Combine data for observed vs predicted plot
+obs_pred_data <- data.frame(
+  observed = c(fit_model1$data$tipo, fit_model2$data$tipo),
+  predicted = c(apply(y_rep1, 2, mean), apply(y_rep2, 2, mean)),
+  model = rep(c("Model 1", "Model 2"), each = nrow(fit_model1$data))
+)
+
+# Create scatter plot
+ggplot(obs_pred_data, aes(x = observed, y = predicted, color = model)) +
+  geom_jitter(width = 0.05, alpha = 0.7, size = 2) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  labs(
+    title = "Observed vs Predicted Comparison",
+    x = "Observed Values",
+    y = "Predicted Values"
+  ) +
+  scale_color_manual(values = c("blue", "red")) +
+  theme_minimal()
+
+```
+```{r}
+
+
+# Generate posterior predictions
+y_rep1 <- posterior_predict(fit_model1)
+y_rep2 <- posterior_predict(fit_model2)
+
+# Compute mean predicted probabilities for each observation
+predicted_mean1 <- apply(y_rep1, 2, mean)
+predicted_mean2 <- apply(y_rep2, 2, mean)
+
+# Combine data for observed vs predicted plot
+obs_pred_data <- data.frame(
+  observed = as.factor(c(fit_model1$data$tipo, fit_model2$data$tipo)),  # Ensure binary values are treated as factors
+  predicted = c(predicted_mean1, predicted_mean2),
+  model = rep(c("Model 1", "Model 2"), each = nrow(fit_model1$data))
+)
+
+# Create scatter plot with jitter for visibility
+ggplot(obs_pred_data, aes(x = observed, y = predicted, color = model)) +
+  geom_jitter(width = 0.2, height = 0, alpha = 0.7, size = 2) +  # Jitter to separate overlapping points
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "black") +  # Reference line for classification threshold
+  labs(
+    title = "Observed vs. Predicted Scatterplot",
+    x = "Observed Values (Binary Outcome)",
+    y = "Predicted Probability"
+  ) +
+  scale_color_manual(values = c("blue", "red")) +
+  theme_minimal()
+
+```
+
+```{r}
+# Combine data for histogram
+hist_data <- data.frame(
+  predicted = c(apply(y_rep1, 2, mean), apply(y_rep2, 2, mean)),
+  model = rep(c("Model 1", "Model 2"), each = nrow(fit_model1$data))
+)
+
+# Create histogram
+ggplot(hist_data, aes(x = predicted, fill = model)) +
+  geom_histogram(binwidth = 0.05, position = "identity", alpha = 0.4) +
+  labs(
+    title = "Histogram of Predicted Responses",
+    x = "Predicted Values",
+    y = "Count"
+  ) +
+  scale_fill_manual(values = c("blue", "red")) +
+  theme_minimal()
+
+```
+
+
+```{r}
+# Combine residuals into a single data frame
+residuals_combined <- data.frame(
+  Residuals = c(residuals(fit_model1), residuals(fit_model2)),
+  Model = rep(c("Model 1", "Model 2"), each = length(residuals(fit_model1)))
+)
+
+# Create a combined residuals histogram
+library(ggplot2)
+
+ggplot(residuals_combined, aes(x = Residuals, fill = Model)) +
+  geom_histogram(binwidth = 0.1, position = "dodge", color = "black", alpha = 0.7) +
+  labs(
+    title = "Combined Residuals Histogram",
+    x = "Residuals",
+    y = "Frequency"
+  ) +
+  scale_fill_manual(values = c("skyblue", "orange")) +
+  theme_minimal()
+
+```
+
+
+
+```{r}
+# Perform LOO-CV for both models
+loo_model1 <- loo(fit_model1)
+loo_model2 <- loo(fit_model2)
+
+# Compare LOO-CV scores
+loo_compare(loo_model1, loo_model2)
+
+```
+
+
+```{r}
+# Rhat Plots
+mcmc_plot(fit_model1, type = "rhat") + ggtitle("Rhat: Model 1")
+mcmc_plot(fit_model2, type = "rhat") + ggtitle("Rhat: Model 2")
+
+# ESS (Effective Sample Size) Plots
+mcmc_plot(fit_model1, type = "neff") + ggtitle("Effective Sample Size: Model 1")
+mcmc_plot(fit_model2, type = "neff") + ggtitle("Effective Sample Size: Model 2")
+
+```
+```{r}
+# Extract Rhat values from model summaries
+rhat_model1 <- as.numeric(summary(fit_model1)$fixed$Rhat)
+rhat_model2 <- as.numeric(summary(fit_model2)$fixed$Rhat)
+
+# Combine Rhat data into a single data frame
+rhat_combined <- data.frame(
+  Rhat = c(rhat_model1, rhat_model2),
+  Model = rep(c("Model 1", "Model 2"), c(length(rhat_model1), length(rhat_model2)))
+)
+
+# Create a combined Rhat plot
+ggplot(rhat_combined, aes(x = Rhat, fill = Model)) +
+  geom_histogram(binwidth = 0.01, alpha = 0.5, position = "identity") +
+  labs(
+    title = "Combined Rhat Plot for Both Models",
+    x = "Rhat",
+    y = "Count"
+  ) +
+  scale_fill_manual(values = c("blue", "red")) +
+  theme_minimal()
+
+```
+
+
+
+```{r}
+# Extract ESS values from model summaries
+ess_model1 <- as.numeric(summary(fit_model1)$fixed$Bulk_ESS)
+ess_model2 <- as.numeric(summary(fit_model2)$fixed$Bulk_ESS)
+
+# Combine ESS data into a single data frame
+ess_combined <- data.frame(
+  ESS = c(ess_model1, ess_model2),
+  Model = rep(c("Model 1", "Model 2"), c(length(ess_model1), length(ess_model2)))
+)
+
+# Create a combined ESS plot
+ggplot(ess_combined, aes(x = ESS, fill = Model)) +
+  geom_histogram(binwidth = 50, alpha = 0.5, position = "identity") +
+  labs(
+    title = "Combined Effective Sample Size Plot for Both Models",
+    x = "Effective Sample Size (Bulk ESS)",
+    y = "Count"
+  ) +
+  scale_fill_manual(values = c("blue", "red")) +
+  theme_minimal()
+
+```
+
+
+
+
+
+
+#################################################################
+#  5 Prior Sensitivity Test of Model 2  
+#################################################################
+<!-- # ```{r} -->
+<!-- # # Define a list of priors from the slides -->
+<!-- # prior_list <- list( -->
+<!-- #   "Normal(0, 10)" = prior(normal(0, 10), class = "b"),          #Normal(0, 10) or Normal(0, 1) for regression coefficients, -->
+<!-- #   "Normal(0, 1)" = prior(normal(0, 1), class = "b"),            #"07_GLM.pdf" slide 29 and "12_prior_specification.pdf" slide 35. -->
+<!-- #   "Exponential(1)" = prior(exponential(1), class = "sd"),       #Exponential(1) for standard deviation parameters."12_prior_specification.pdf" slide 42 -->
+<!-- #   "Student-t(3, 0, 1)" = prior(student_t(3, 0, 1), class = "b"),#Student-t(3, 0, 1) for robust modeling of coefficients or intercepts, "12_prior_specification.pdf" slide 19 -->
+<!-- #   "Flat (Uniform)" = prior(flat(), class = "b")                 #Uniform distributions for minimally informative priors, often used for comparison or sensitivity testing, "07_GLM.pdf" slide 28 -->
+<!-- # ) -->
+<!-- # -->
+<!-- # ``` -->
+
+<!-- # Define the file path for the saved model -->
+<!-- model_file <- "fit_model2_normal_10.rds" -->
+
+<!-- # Check if the model file exists -->
+<!-- if (file.exists(model_file)) { -->
+<!--   # Load the saved model -->
+<!--   cat("Loading saved model from file:", model_file, "\n") -->
+<!--   fit_model2_normal_10 <- readRDS(model_file) -->
+<!-- } else { -->
+<!--   # Train the model since the file does not exist -->
+<!--   cat("Model file not found. Training the model...\n") -->
+<!--   fit_model2_normal_10 <- brm( -->
+<!--     formula = formula2, -->
+<!--     data = data, -->
+<!--     family = bernoulli(link = "logit"), -->
+<!--     prior = prior(normal(0, 10), class = "b"),  # Specify prior -->
+<!--     chains = 4, iter = 2000, warmup = 1000, cores = 4, seed = 123 -->
+<!--   ) -->
+
+<!--   # Save the trained model -->
+<!--   saveRDS(fit_model2_normal_10, file = model_file) -->
+<!--   cat("Model saved to file:", model_file, "\n") -->
+<!-- } -->
+
+
+```{r}
+fit_model2_normal_10 <- readRDS("fit_model2_normal_10.rds") #"07_GLM.pdf" slide 29
+```
+
+```{r}
+fit_model2_normal_1 <- readRDS("fit_model2_normal_1.rds") # Normal(0, 1) prior "12_prior_specification.pdf" slide 35
+```
+
+```{r}
+fit_model2_exponential <- readRDS("fit_model2_exponential.rds") # Exponential(1) prior, "12_prior_specification.pdf" slide 42
+```
+
+```{r}
+fit_model2_student_t <- readRDS("fit_model2_student_t.rds") # Student-t(3, 0, 1) prior , "12_prior_specification.pdf" slide 19
+```
+
+```{r}
+fit_model2_flat <- readRDS("fit_model2_flat.rds") # Flat prior: In brms, not specifying a prior for a parameter will often default to a non-informative flat prior.,  "07_GLM.pdf" slide 28
+```
+
+```{r}
+# Load required libraries
+library(bayesplot)
+library(gridExtra)
+
+# Create a list of models with their respective names
+sensitivity_models <- list(
+  "Normal(0, 10)" = fit_model2_normal_10,
+  "Normal(0, 1)" = fit_model2_normal_1,
+  "Exponential(1)" = fit_model2_exponential,
+  "Student-t(3, 0, 1)" = fit_model2_student_t,
+  "Flat (Uniform)" = fit_model2_flat
+)
+
+# Define the parameters to visualize 
+parameters <- c(
+   "b_CCI_mean", "b_EMA200_mean", "b_Force_mean", "b_MACD_mean", "b_MOM_mean", "b_RSI_mean",
+  "b_STD_mean", "b_Stochastic_mean", "b_Intercept"
+)
+
+# Generate posterior plots for each model
+posterior_plots <- lapply(names(sensitivity_models), function(prior_name) {
+  model <- sensitivity_models[[prior_name]]
+  
+  mcmc_areas(
+    as_draws_df(model), pars = parameters
+  ) + ggtitle(paste("Posterior Distributions for Prior:", prior_name))
+})
+
+# Combine and display all plots
+do.call(grid.arrange, posterior_plots)
+
+ggsave(
+  filename = "posterior_distributions1.png",
+  plot = grid.arrange(
+    grobs = posterior_plots,
+    ncol = 2,
+    top = "Posterior Distributions for Different Priors"
+  ),
+  width = 12, height = 8, dpi = 300 # Adjust width, height, and resolution as needed
+)
+
+```
+```{r}
+# Extract posterior samples for "b_BB_mean" from all models
+posterior_samples <- lapply(sensitivity_models, function(model) {
+  as_draws_df(model)[["b_MACD_mean"]]
+})
+
+# Combine the samples into a data frame
+posterior_df <- do.call(rbind, lapply(names(posterior_samples), function(prior_name) {
+  data.frame(
+    Posterior = posterior_samples[[prior_name]],
+    Model = prior_name
+  )
+}))
+
+# Load ggplot2 for visualization
+library(ggplot2)
+
+# Create a density plot for "b_BB_mean" across all models
+ggplot(posterior_df, aes(x = Posterior, fill = Model, color = Model)) +
+  geom_density(alpha = 0.5) +
+  labs(
+    title = "Posterior Distribution for b_BB_mean Across Models",
+    x = "Posterior Value",
+    y = "Density",
+    fill = "Prior",
+    color = "Prior"
+  ) +
+  theme_minimal()
+# Create a density plot with only lines for "b_BB_mean" across all models
+ggplot(posterior_df, aes(x = Posterior, color = Model)) +
+  geom_density(size = 1) +  # Add density plot with thicker lines
+  labs(
+    title = "Posterior Distribution for b_BB_mean Across Models (Lines Only)",
+    x = "Posterior Value",
+    y = "Density",
+    color = "Prior"
+  ) +
+  theme_minimal()
+
+
+```
+
+```{r}
+print(colnames(posterior_df))
+print(parameters)
+```
+
+
+```{r}
+# Initialize an empty dataframe to store posterior samples
+posterior_df <- data.frame()
+
+# Loop through each model and extract posterior samples
+for (prior_name in names(sensitivity_models)) {
+  model <- sensitivity_models[[prior_name]]
+  
+  # Extract posterior samples
+  samples <- as_draws_df(model)
+  
+  # Reshape samples to long format for ggplot
+  samples_long <- samples %>%
+    pivot_longer(cols = starts_with("b_"), names_to = "Parameter", values_to = "Posterior") %>%
+    mutate(Model = prior_name)  # Add the model (prior) name
+  
+  # Append to the posterior_df
+  posterior_df <- rbind(posterior_df, samples_long)
+}
+
+# Extract unique parameter names for plotting
+parameters <- unique(posterior_df$Parameter)
+
+```
+
+
+
+
+```{r}
+# Load required libraries
+library(ggplot2)
+library(gridExtra)
+
+# Directory to save the plots (create this directory if it doesn't exist)
+output_dir <- "posterior_plots"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+
+# Initialize a list to store plots
+plots <- list()
+
+# Loop through each parameter and generate a density plot
+for (param in parameters) {
+  # Filter the data for the current parameter
+  param_df <- posterior_df[posterior_df$Parameter == param, ]
+  
+  # Check if the parameter has any data
+  if (nrow(param_df) > 0) {
+    # Create the density plot
+    p <- ggplot(param_df, aes(x = Posterior, color = Model)) +
+      geom_density(size = 1) +  # Line-only density plot
+      labs(
+        title = paste("Posterior Distribution for", param, "Across Models"),
+        x = "Posterior Value",
+        y = "Density",
+        color = "Prior"
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.text = element_text(size = 8),
+        legend.text = element_text(size = 8)
+      )
+
+    # Save the plot as a PNG file
+    ggsave(
+      filename = file.path(output_dir, paste0("posterior_plot_", param, ".png")),
+      plot = p,
+      width = 6, height = 4, dpi = 300  # Adjust dimensions and resolution as needed
+    )
+    
+    # Add the plot to the list
+    plots[[param]] <- p
+  } else {
+    cat("No data found for parameter:", param, "\n")
+  }
+}
+
+# Optional: Display all the plots in a grid with pagination
+if (length(plots) > 0) {
+  num_plots <- length(plots)
+  plots_per_page <- 6  # Adjust this number based on your preference
+  
+  # Divide plots into pages
+  for (i in seq(1, num_plots, by = plots_per_page)) {
+    grid_plots <- plots[i:min(i + plots_per_page - 1, num_plots)]
+    do.call(grid.arrange, c(grid_plots, ncol = 2))  # Adjust `ncol` for layout
+  }
+} else {
+  cat("No plots were generated. Check your parameter names and dataset.\n")
+}
+
+```
+
+
+
+#################################################################
+##  5.1 Prior Sensitivity Extreme Test Model 2  
+#################################################################
+
+
+```{r}
+fit_model2_normal_100 <- readRDS("fit_model2_normal_100.rds")
+```
+
+```{r}
+fit_model2_exponential5 <- readRDS("fit_model2_exponential5.rds")
+```
+
+```{r}
+# Create a list of models with their respective names
+sensitivity_models2 <- list(
+  "Normal(0, 10)" = fit_model2_normal_10,
+  "Normal(0, 1)" = fit_model2_normal_1,
+  "Exponential(1)" = fit_model2_exponential,
+  "Student-t(3, 0, 1)" = fit_model2_student_t,
+  "Flat (Uniform)" = fit_model2_flat,
+  "Normal(0, 100)" = fit_model2_normal_100,
+  "Exponential(5)" = fit_model2_exponential5
+)
+```
+
+
+
+```{r}
+# Initialize an empty dataframe to store posterior samples
+posterior_df2 <- data.frame()
+
+# Loop through each model and extract posterior samples
+for (prior_name in names(sensitivity_models2)) {
+  model <- sensitivity_models2[[prior_name]]
+  
+  # Extract posterior samples
+  samples <- as_draws_df(model)
+  
+  # Reshape samples to long format for ggplot
+  samples_long <- samples %>%
+    pivot_longer(cols = starts_with("b_"), names_to = "Parameter", values_to = "Posterior") %>%
+    mutate(Model = prior_name)  # Add the model (prior) name
+  
+  # Append to the posterior_df
+  posterior_df2 <- rbind(posterior_df2, samples_long)
+}
+
+# Extract unique parameter names for plotting
+parameters <- unique(posterior_df2$Parameter)
+
+# Print the updated data for verification
+print(head(posterior_df2))
+print(parameters)
+
+```
+
+
+```{r}
+# Directory to save the plots (create this directory if it doesn't exist)
+output_dir <- "posterior_plots_2"
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir)
+}
+
+# Initialize a list to store plots
+plots <- list()
+
+# Loop through each parameter and generate a density plot
+for (param in parameters) {
+  # Filter the data for the current parameter
+  param_df <- posterior_df2[posterior_df2$Parameter == param, ]
+  
+  # Check if the parameter has any data
+  if (nrow(param_df) > 0) {
+    # Create the density plot
+    p <- ggplot(param_df, aes(x = Posterior, color = Model)) +
+      geom_density(size = 1) +  # Line-only density plot
+      labs(
+        title = paste("Posterior Distribution for", param, "Across Models"),
+        x = "Posterior Value",
+        y = "Density",
+        color = "Prior"
+      ) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(size = 10, face = "bold"),
+        axis.text = element_text(size = 8),
+        legend.text = element_text(size = 8)
+      )
+
+    # Save the plot as a PNG file
+    ggsave(
+      filename = file.path(output_dir, paste0("posterior_plot_", param, ".png")),
+      plot = p,
+      width = 6, height = 4, dpi = 300  # Adjust dimensions and resolution as needed
+    )
+    
+    # Add the plot to the list
+    plots[[param]] <- p
+  } else {
+    cat("No data found for parameter:", param, "\n")
+  }
+}
+
+# Optional: Display all the plots in a grid with pagination
+if (length(plots) > 0) {
+  num_plots <- length(plots)
+  plots_per_page <- 6  # Adjust this number based on your preference
+  
+  # Divide plots into pages
+  for (i in seq(1, num_plots, by = plots_per_page)) {
+    grid_plots <- plots[i:min(i + plots_per_page - 1, num_plots)]
+    do.call(grid.arrange, c(grid_plots, ncol = 2))  # Adjust `ncol` for layout
+  }
+} else {
+  cat("No plots were generated. Check your parameter names and dataset.\n")
+}
+```
+
+```{r}
+# Generate posterior plots for each model
+posterior_plots <- lapply(names(sensitivity_models2), function(prior_name) {
+  model <- sensitivity_models2[[prior_name]]
+  
+  mcmc_areas(
+    as_draws_df(model), pars = parameters
+  ) + ggtitle(paste("Posterior Distributions for Prior:", prior_name))
+})
+
+# Combine and display all plots
+do.call(grid.arrange, posterior_plots)
+
+ggsave(
+  filename = "posterior_distributions.png",
+  plot = grid.arrange(
+    grobs = posterior_plots,
+    ncol = 2,
+    top = "Posterior Distributions for Different Priors"
+  ),
+  width = 12, height = 8, dpi = 300 # Adjust width, height, and resolution as needed
+)
+```
+
+
+
+
+
+
+
+
+
+#################################################################
+#6 Prior Exchangeability Test of Model 2  
+#################################################################
+
+
+```{r}
+fit_model_exchangeability <- readRDS("fit_model_exchangeability.rds")
+```
+```{r}
+print(names(posterior_samples(fit_model2)))
+print(names(posterior_samples(fit_model_exchangeability)))
+```
+
+
+```{r}
+library(posterior)
+
+# Extract all group-level intercepts
+posterior_group <- as_draws_df(fit_model2)
+posterior_hour <- as_draws_df(fit_model_exchangeability)
+
+# Select only the relevant parameters
+posterior_group <- posterior_group[, grepl("r_group\\[", names(posterior_group))]
+posterior_hour <- posterior_hour[, grepl("r_hour\\[", names(posterior_hour))]
+
+# Convert to long format for visualization
+library(reshape2)
+posterior_long_group <- melt(posterior_group, variable.name = "Group", value.name = "Intercept")
+posterior_long_hour <- melt(posterior_hour, variable.name = "Hour", value.name = "Intercept")
+
+```
+```{r}
+library(ggplot2)
+
+ggplot(posterior_long_group, aes(x = Intercept, fill = Group)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Posterior Distributions of Group Effects (Group Model)",
+       x = "Intercept Value",
+       y = "Density") +
+  theme_minimal() +
+  scale_fill_viridis_d(name = "Group")
+
+```
+
+```{r}
+ggplot(posterior_long_hour, aes(x = Intercept, fill = Hour)) +
+  geom_density(alpha = 0.5) +
+  labs(title = "Posterior Distributions of Hour Effects",
+       x = "Intercept Value",
+       y = "Density") +
+  theme_minimal() +
+  scale_fill_viridis_d(name = "Hour")
+
+```
+
+```{r}
+library(ggplot2)
+library(reshape2)
+
+# Combine both datasets into a single dataframe
+posterior_combined <- rbind(
+  data.frame(Intercept = posterior_long_group$Intercept, Model = "Group-Based"),
+  data.frame(Intercept = posterior_long_hour$Intercept, Model = "Hour-Based")
+)
+
+ggplot(posterior_combined, aes(x = Intercept, color = Model, linetype = Model)) +
+  geom_vline(aes(xintercept = mean(Intercept[Model == "Group-Based"])), color = "blue", linetype = "dotted") +
+geom_vline(aes(xintercept = mean(Intercept[Model == "Hour-Based"])), color = "red", linetype = "dotted") +
+  geom_density(size = 0.8, alpha = 0.8) +  # Adjust size and transparency
+  labs(
+    title = "Comparison of Group-Based Effects vs. Hour-Based Effects",
+    x = "Intercept Value",
+    y = "Density"
+  ) +
+  theme_minimal() +
+  scale_color_manual(values = c("blue", "red")) +  # Blue for Group, Red for Hour
+  scale_linetype_manual(values = c("solid", "dashed"))  # Different line types
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
