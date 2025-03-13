@@ -30,8 +30,8 @@ Users can access the dataset and scripts for further analysis and modifications.
 ### **R Libraries Needed**
 To run this project, install the following **R** packages:
 ```r
-install.packages(c("brms", "ggplot2", "loo", "dplyr"))
-
+install.packages(c("brms", "ggplot2", "corrplot", "loo", "dplyr", "bayesplot" , "tidyr", "tidyverse", "gridExtra"))
+```
 ---
 
 ## 🏆 Model Implementation
