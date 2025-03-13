@@ -18,5 +18,16 @@ This project explores **Hierarchical Bayesian Logistic Regression** for predicti
 
 ---
 
-## 📂 Project Structure
-├── data/ # Preprocessed dataset files ├── figures/ # Plots & visualizations ├── scripts/ # R scripts for model training & evaluation ├── report/ # LaTeX report & supplementary materials ├── README.md # Project documentation └── abda_project.Rproj # RStudio project file
+## 📎 Code & Data Availability
+- **📂 GitHub Repository (Code):** [Project Repository](https://github.com/apumrk/abda-project)
+- **📊 Dataset Source:** [Kaggle: EUR/USD Forex Dataset](https://www.kaggle.com/datasets/rsalaschile/forex-eurusd-dataset)
+
+Users can access the dataset and scripts for further analysis and modifications.
+
+---
+
+## 🛠 Requirements
+### **R Libraries Needed**
+To run this project, install the following **R** packages:
+```r
+install.packages(c("brms", "ggplot2", "loo", "dplyr"))
